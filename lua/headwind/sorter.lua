@@ -2,7 +2,7 @@ local config = require("headwind.config")
 
 local M = {}
 
--- Remove duplicates from array (equivalent to [...new Set(classArray)])
+-- Exact implementation of removeDuplicates from Headwind
 local function remove_duplicates(class_array)
 	local seen = {}
 	local result = {}
@@ -15,150 +15,130 @@ local function remove_duplicates(class_array)
 	return result
 end
 
--- Find index of element in array (equivalent to sortOrder.indexOf(el))
-local function index_of(array, element)
-	for i, v in ipairs(array) do
-		if v == element then
-			return i
-		end
-	end
-	return -1
-end
-
--- Sort class array using the exact Headwind algorithm
+-- Exact implementation of sortClassArray from Headwind using spread operator logic
 local function sort_class_array(class_array, sort_order, should_prepend_custom_classes)
 	local result = {}
 
-	-- Filter classes not in sort order (custom classes)
-	local custom_classes = {}
-	for _, class in ipairs(class_array) do
-		if index_of(sort_order, class) == -1 then
-			table.insert(custom_classes, class)
+	-- First part: classes not in sort order if shouldPrependCustomClasses is true
+	if should_prepend_custom_classes then
+		for _, el in ipairs(class_array) do
+			local found_in_sort_order = false
+			for _, sort_el in ipairs(sort_order) do
+				if el == sort_el then
+					found_in_sort_order = true
+					break
+				end
+			end
+			if not found_in_sort_order then
+				table.insert(result, el)
+			end
 		end
 	end
 
-	-- Filter classes that ARE in sort order
-	local known_classes = {}
-	for _, class in ipairs(class_array) do
-		if index_of(sort_order, class) ~= -1 then
-			table.insert(known_classes, class)
+	-- Second part: classes that ARE in sort order, sorted by their position
+	local classes_in_order = {}
+	for _, el in ipairs(class_array) do
+		for sort_idx, sort_el in ipairs(sort_order) do
+			if el == sort_el then
+				table.insert(classes_in_order, { class = el, index = sort_idx })
+				break
+			end
 		end
 	end
 
-	-- Sort known classes by their position in sort_order
-	table.sort(known_classes, function(a, b)
-		local index_a = index_of(sort_order, a)
-		local index_b = index_of(sort_order, b)
-		return index_a < index_b
+	-- Sort by index in sort_order (equivalent to .sort((a, b) => sortOrder.indexOf(a) - sortOrder.indexOf(b)))
+	table.sort(classes_in_order, function(a, b)
+		return a.index < b.index
 	end)
 
-	-- Combine arrays based on shouldPrependCustomClasses
-	if should_prepend_custom_classes then
-		-- Custom classes first, then sorted known classes
-		for _, class in ipairs(custom_classes) do
-			table.insert(result, class)
-		end
-		for _, class in ipairs(known_classes) do
-			table.insert(result, class)
-		end
-	else
-		-- Sorted known classes first, then custom classes
-		for _, class in ipairs(known_classes) do
-			table.insert(result, class)
-		end
-		for _, class in ipairs(custom_classes) do
-			table.insert(result, class)
+	for _, item in ipairs(classes_in_order) do
+		table.insert(result, item.class)
+	end
+
+	-- Third part: classes not in sort order if shouldPrependCustomClasses is false
+	if not should_prepend_custom_classes then
+		for _, el in ipairs(class_array) do
+			local found_in_sort_order = false
+			for _, sort_el in ipairs(sort_order) do
+				if el == sort_el then
+					found_in_sort_order = true
+					break
+				end
+			end
+			if not found_in_sort_order then
+				table.insert(result, el)
+			end
 		end
 	end
 
 	return result
 end
 
--- Main sorting function (equivalent to sortClassString)
+-- Exact implementation of sortClassString from Headwind
 function M.sort_class_string(class_string, sort_order, options)
 	options = options or {}
-	local should_remove_duplicates = options.should_remove_duplicates ~= false
-	local should_prepend_custom_classes = options.should_prepend_custom_classes or false
-	local custom_tailwind_prefix = options.custom_tailwind_prefix or ""
 
-	-- Determine separator (space or other)
-	local default_separator = "%S+" -- Lua pattern for non-whitespace
-	local default_replacement = " "
+	-- Exact logic from Headwind: const default_separator = classString.includes(' ') ? /\s+/g : '.';
+	local has_spaces = string.find(class_string, " ") ~= nil
+	local default_separator = has_spaces and "%S+" or "[^.]+"
+	local default_replacement = has_spaces and " " or "."
 
-	if not string.find(class_string, " ") then
-		default_separator = "[^.]+" -- Split by dots if no spaces
-		default_replacement = "."
-	end
-
-	-- Split class string into array
+	-- Split classString: let classArray = classString.split(options.separator || default_separator);
 	local class_array = {}
-	for class in string.gmatch(class_string, default_separator) do
-		if class ~= "" then
+	local separator_pattern = options.separator or default_separator
+
+	if has_spaces then
+		-- Split by whitespace
+		for class in string.gmatch(class_string, "%S+") do
+			table.insert(class_array, class)
+		end
+	else
+		-- Split by dots
+		for class in string.gmatch(class_string, "[^.]+") do
 			table.insert(class_array, class)
 		end
 	end
 
+	-- Filter empty elements: classArray = classArray.filter((el) => el !== '');
+	local filtered_array = {}
+	for _, el in ipairs(class_array) do
+		if el ~= "" then
+			table.insert(filtered_array, el)
+		end
+	end
+	class_array = filtered_array
+
 	-- Remove duplicates if configured
-	if should_remove_duplicates then
+	if options.should_remove_duplicates then
 		class_array = remove_duplicates(class_array)
 	end
 
-	-- Clone sort order and add custom prefix if needed
+	-- Clone sort order and add custom prefix: const sortOrderClone = [...sortOrder];
 	local sort_order_clone = {}
 	for _, class in ipairs(sort_order) do
-		if custom_tailwind_prefix ~= "" then
-			table.insert(sort_order_clone, custom_tailwind_prefix .. class)
-		else
-			table.insert(sort_order_clone, class)
+		table.insert(sort_order_clone, class)
+	end
+
+	-- Add custom prefix if configured
+	if options.custom_tailwind_prefix and options.custom_tailwind_prefix ~= "" then
+		for i = 1, #sort_order_clone do
+			sort_order_clone[i] = options.custom_tailwind_prefix .. sort_order_clone[i]
 		end
 	end
 
-	-- Sort the class array
-	class_array = sort_class_array(class_array, sort_order_clone, should_prepend_custom_classes)
+	-- Sort the array using exact Headwind logic
+	class_array = sort_class_array(class_array, sort_order_clone, options.should_prepend_custom_classes or false)
 
-	-- Join back to string
-	local result = table.concat(class_array, default_replacement)
+	-- Join back to string: const result = classArray.join(options.replacement || default_replacement).trim()
+	local replacement = options.replacement or default_replacement
+	local result = table.concat(class_array, replacement)
 
-	-- Handle dot prefix if original string started with dot
-	if default_replacement == "." and string.sub(class_string, 1, 1) == "." then
+	-- Handle dot prefix: if( (default_separator == ".") && (classString.startsWith(".")))
+	if not has_spaces and string.sub(class_string, 1, 1) == "." then
 		return "." .. result
 	else
 		return result
 	end
-end
-
--- Sort classes according to the predefined order
-function M.sort_classes(classes)
-	local options = {
-		should_remove_duplicates = config.options.remove_duplicates,
-		should_prepend_custom_classes = false, -- Headwind default
-		custom_tailwind_prefix = "",
-	}
-
-	local class_string = table.concat(classes, " ")
-	local sorted_string = M.sort_class_string(class_string, config.options.sort_order, options)
-
-	-- Split back into array
-	local result = {}
-	for class in string.gmatch(sorted_string, "%S+") do
-		table.insert(result, class)
-	end
-
-	return result
-end
-
--- Split class string into individual classes (preserves modifiers like hover:)
-function M.split_classes(class_string)
-	local classes = {}
-	for class in string.gmatch(class_string, "%S+") do
-		table.insert(classes, class)
-	end
-	return classes
-end
-
--- Join classes back into a string
-function M.join_classes(classes)
-	return table.concat(classes, " ")
 end
 
 -- Main function to sort classes in a line using exact Headwind logic
@@ -196,6 +176,37 @@ function M.sort_classes_in_line(line, filetype)
 	end)
 
 	return result
+end
+
+-- Legacy functions for compatibility
+function M.sort_classes(classes)
+	local class_string = table.concat(classes, " ")
+	local options = {
+		should_remove_duplicates = config.options.remove_duplicates,
+		should_prepend_custom_classes = false,
+		custom_tailwind_prefix = "",
+	}
+
+	local sorted_string = M.sort_class_string(class_string, config.options.sort_order, options)
+
+	local result = {}
+	for class in string.gmatch(sorted_string, "%S+") do
+		table.insert(result, class)
+	end
+
+	return result
+end
+
+function M.split_classes(class_string)
+	local classes = {}
+	for class in string.gmatch(class_string, "%S+") do
+		table.insert(classes, class)
+	end
+	return classes
+end
+
+function M.join_classes(classes)
+	return table.concat(classes, " ")
 end
 
 return M

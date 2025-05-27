@@ -3,18 +3,19 @@ local M = {}
 M.defaults = {
 	run_on_save = true,
 	remove_duplicates = true,
+	-- Updated patterns that capture quotes separately
 	class_regex = {
-		html = 'class="([^"]*)"',
-		javascript = 'className="([^"]*)"',
-		javascriptreact = 'className="([^"]*)"',
-		typescript = 'className="([^"]*)"',
-		typescriptreact = 'className="([^"]*)"',
-		vue = 'class="([^"]*)"',
-		svelte = 'class="([^"]*)"',
-		php = 'class="([^"]*)"',
-		erb = 'class="([^"]*)"',
-		handlebars = 'class="([^"]*)"',
-		twig = 'class="([^"]*)"',
+		html = '(class=")([^"]*)(")',
+		javascript = '(className=")([^"]*)(")',
+		javascriptreact = '(className=")([^"]*)(")',
+		typescript = '(className=")([^"]*)(")',
+		typescriptreact = '(className=")([^"]*)(")',
+		vue = '(class=")([^"]*)(")',
+		svelte = '(class=")([^"]*)(")',
+		php = '(class=")([^"]*)(")',
+		erb = '(class=")([^"]*)(")',
+		handlebars = '(class=")([^"]*)(")',
+		twig = '(class=")([^"]*)(")',
 	},
 	-- Complete Headwind sort order
 	sort_order = {

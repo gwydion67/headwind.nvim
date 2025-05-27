@@ -43,19 +43,7 @@ function M.sort_classes(classes)
 	return classes
 end
 
--- Extract classes from a line using regex
-function M.extract_classes_from_line(line, filetype)
-	local regex = config.options.class_regex[filetype] or config.options.class_regex.html
-	local matches = {}
-
-	for match in string.gmatch(line, regex) do
-		table.insert(matches, match)
-	end
-
-	return matches
-end
-
--- Split class string into individual classes
+-- Split class string into individual classes (preserves modifiers like hover:)
 function M.split_classes(class_string)
 	local classes = {}
 	for class in string.gmatch(class_string, "%S+") do
@@ -71,13 +59,32 @@ end
 
 -- Main function to sort classes in a line
 function M.sort_classes_in_line(line, filetype)
-	local regex = config.options.class_regex[filetype] or config.options.class_regex.html
+	-- Use a pattern that captures the quotes separately to preserve them
+	local patterns = {
+		html = '(class=")([^"]*)(")',
+		javascript = '(className=")([^"]*)(")',
+		javascriptreact = '(className=")([^"]*)(")',
+		typescript = '(className=")([^"]*)(")',
+		typescriptreact = '(className=")([^"]*)(")',
+		vue = '(class=")([^"]*)(")',
+		svelte = '(class=")([^"]*)(")',
+		php = '(class=")([^"]*)(")',
+		erb = '(class=")([^"]*)(")',
+		handlebars = '(class=")([^"]*)(")',
+		twig = '(class=")([^"]*)(")',
+	}
 
-	-- Replace all class attributes in the line
-	local result = string.gsub(line, regex, function(class_string)
-		local classes = M.split_classes(class_string)
-		local sorted_classes = M.sort_classes(classes)
-		return M.join_classes(sorted_classes)
+	local pattern = patterns[filetype] or patterns.html
+
+	-- Replace class attribute preserving quotes and surrounding text
+	local result = string.gsub(line, pattern, function(prefix, class_string, suffix)
+		if class_string and class_string ~= "" then
+			local classes = M.split_classes(class_string)
+			local sorted_classes = M.sort_classes(classes)
+			return prefix .. M.join_classes(sorted_classes) .. suffix
+		else
+			return prefix .. class_string .. suffix
+		end
 	end)
 
 	return result

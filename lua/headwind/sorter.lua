@@ -78,24 +78,51 @@ end
 function M.sort_class_string(class_string, sort_order, options)
 	options = options or {}
 
-	-- Exact logic from Headwind: const default_separator = classString.includes(' ') ? /\s+/g : '.';
+	-- Exact logic from TypeScript: const default_separator = classString.includes(' ') ? /\s+/g : '.';
 	local has_spaces = string.find(class_string, " ") ~= nil
-	local default_separator = has_spaces and "%S+" or "[^.]+"
+	local default_separator_is_dot = not has_spaces
 	local default_replacement = has_spaces and " " or "."
 
-	-- Split classString: let classArray = classString.split(options.separator || default_separator);
+	-- Split classString exactly like TypeScript version
 	local class_array = {}
-	local separator_pattern = options.separator or default_separator
 
-	if has_spaces then
-		-- Split by whitespace
-		for class in string.gmatch(class_string, "%S+") do
-			table.insert(class_array, class)
+	-- Use custom separator if provided, otherwise use default logic
+	if options.separator then
+		-- For custom separator, split by the provided pattern
+		if type(options.separator) == "string" then
+			for class in string.gmatch(class_string, "[^" .. options.separator .. "]+") do
+				if class ~= "" then
+					table.insert(class_array, class)
+				end
+			end
+		else
+			-- If separator is a pattern, use it directly
+			for class in string.gmatch(class_string, options.separator) do
+				if class ~= "" then
+					table.insert(class_array, class)
+				end
+			end
 		end
 	else
-		-- Split by dots
-		for class in string.gmatch(class_string, "[^.]+") do
-			table.insert(class_array, class)
+		-- Default separator logic - exact match to TypeScript
+		if has_spaces then
+			-- Split by whitespace (/\s+/g equivalent)
+			for class in string.gmatch(class_string, "%S+") do
+				table.insert(class_array, class)
+			end
+		else
+			-- Split by dots (equivalent to splitting by '.')
+			-- Handle case where string starts with dot
+			local working_string = class_string
+			if string.sub(working_string, 1, 1) == "." then
+				working_string = string.sub(working_string, 2)
+			end
+
+			for class in string.gmatch(working_string, "[^.]+") do
+				if class ~= "" then
+					table.insert(class_array, class)
+				end
+			end
 		end
 	end
 
@@ -133,16 +160,16 @@ function M.sort_class_string(class_string, sort_order, options)
 	local replacement = options.replacement or default_replacement
 	local result = table.concat(class_array, replacement)
 
-	-- Handle dot prefix: if( (default_separator == ".") && (classString.startsWith(".")))
-	if not has_spaces and string.sub(class_string, 1, 1) == "." then
+	-- Exact logic from TypeScript: if( (default_separator == ".") && (classString.startsWith(".")))
+	if default_separator_is_dot and string.sub(class_string, 1, 1) == "." then
 		return "." .. result
 	else
 		return result
 	end
 end
 
--- Main function to sort classes in a line using exact Headwind logic
-function M.sort_classes_in_line(line, filetype)
+-- Updated sort_classes_in_line to handle custom separators and replacements
+function M.sort_classes_in_line(line, filetype, custom_options)
 	local patterns = {
 		html = '(class=")([^"]*)(")',
 		javascript = '(className=")([^"]*)(")',
@@ -162,11 +189,12 @@ function M.sort_classes_in_line(line, filetype)
 	-- Replace class attribute preserving quotes and surrounding text
 	local result = string.gsub(line, pattern, function(prefix, class_string, suffix)
 		if class_string and class_string ~= "" then
-			local options = {
-				should_remove_duplicates = config.options.remove_duplicates,
-				should_prepend_custom_classes = false, -- Headwind default
-				custom_tailwind_prefix = "",
-			}
+			local options = custom_options
+				or {
+					should_remove_duplicates = config.options.remove_duplicates,
+					should_prepend_custom_classes = false, -- Headwind default
+					custom_tailwind_prefix = "",
+				}
 
 			local sorted_string = M.sort_class_string(class_string, config.options.sort_order, options)
 			return prefix .. sorted_string .. suffix
@@ -178,6 +206,50 @@ function M.sort_classes_in_line(line, filetype)
 	return result
 end
 
+-- New function to handle dot-separated class strings specifically
+function M.sort_dot_separated_classes(class_string, custom_options)
+	local options = custom_options
+		or {
+			should_remove_duplicates = config.options.remove_duplicates,
+			should_prepend_custom_classes = false,
+			custom_tailwind_prefix = "",
+			separator = nil, -- Let it auto-detect dots
+			replacement = nil, -- Let it auto-detect dots
+		}
+
+	return M.sort_class_string(class_string, config.options.sort_order, options)
+end
+
+-- New function to handle space-separated class strings specifically
+function M.sort_space_separated_classes(class_string, custom_options)
+	local options = custom_options
+		or {
+			should_remove_duplicates = config.options.remove_duplicates,
+			should_prepend_custom_classes = false,
+			custom_tailwind_prefix = "",
+			separator = nil, -- Let it auto-detect spaces
+			replacement = nil, -- Let it auto-detect spaces
+		}
+
+	return M.sort_class_string(class_string, config.options.sort_order, options)
+end
+
+-- Enhanced function with full options support
+function M.sort_classes_with_options(class_string, options)
+	options = options or {}
+
+	-- Merge with defaults
+	local merged_options = {
+		should_remove_duplicates = options.should_remove_duplicates or config.options.remove_duplicates,
+		should_prepend_custom_classes = options.should_prepend_custom_classes or false,
+		custom_tailwind_prefix = options.custom_tailwind_prefix or "",
+		separator = options.separator,
+		replacement = options.replacement,
+	}
+
+	return M.sort_class_string(class_string, config.options.sort_order, merged_options)
+end
+
 -- Legacy functions for compatibility
 function M.sort_classes(classes)
 	local class_string = table.concat(classes, " ")
@@ -186,14 +258,11 @@ function M.sort_classes(classes)
 		should_prepend_custom_classes = false,
 		custom_tailwind_prefix = "",
 	}
-
 	local sorted_string = M.sort_class_string(class_string, config.options.sort_order, options)
-
 	local result = {}
 	for class in string.gmatch(sorted_string, "%S+") do
 		table.insert(result, class)
 	end
-
 	return result
 end
 

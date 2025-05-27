@@ -1,5 +1,4 @@
 local config = require("headwind.config")
-
 local M = {}
 
 -- Exact implementation of removeDuplicates from Headwind
@@ -21,7 +20,7 @@ local function sort_class_array(class_array, sort_order, should_prepend_custom_c
 
 	-- First part: classes not in sort order if shouldPrependCustomClasses is true
 	if should_prepend_custom_classes then
-		for _, el in ipairs(class_array) do
+		for orig_idx, el in ipairs(class_array) do
 			local found_in_sort_order = false
 			for _, sort_el in ipairs(sort_order) do
 				if el == sort_el then
@@ -36,19 +35,28 @@ local function sort_class_array(class_array, sort_order, should_prepend_custom_c
 	end
 
 	-- Second part: classes that ARE in sort order, sorted by their position
+	-- CRITICAL: We need to preserve original order for classes with same sort priority
 	local classes_in_order = {}
-	for _, el in ipairs(class_array) do
+	for orig_idx, el in ipairs(class_array) do
 		for sort_idx, sort_el in ipairs(sort_order) do
 			if el == sort_el then
-				table.insert(classes_in_order, { class = el, index = sort_idx })
+				table.insert(classes_in_order, {
+					class = el,
+					sort_index = sort_idx,
+					original_index = orig_idx, -- Keep original position for stable sort
+				})
 				break
 			end
 		end
 	end
 
-	-- Sort by index in sort_order (equivalent to .sort((a, b) => sortOrder.indexOf(a) - sortOrder.indexOf(b)))
+	-- Sort by sort_index first, then by original_index for stability
+	-- This matches JavaScript's stable sort behavior
 	table.sort(classes_in_order, function(a, b)
-		return a.index < b.index
+		if a.sort_index == b.sort_index then
+			return a.original_index < b.original_index -- Preserve original order for same priority
+		end
+		return a.sort_index < b.sort_index
 	end)
 
 	for _, item in ipairs(classes_in_order) do
@@ -57,7 +65,7 @@ local function sort_class_array(class_array, sort_order, should_prepend_custom_c
 
 	-- Third part: classes not in sort order if shouldPrependCustomClasses is false
 	if not should_prepend_custom_classes then
-		for _, el in ipairs(class_array) do
+		for orig_idx, el in ipairs(class_array) do
 			local found_in_sort_order = false
 			for _, sort_el in ipairs(sort_order) do
 				if el == sort_el then

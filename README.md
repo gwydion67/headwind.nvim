@@ -1,5 +1,5 @@
 # Headwind.nvim
-
+This plugin is the exact implementation of headwind vs code extension
 Headwind.nvim is a modern and lightweight Neovim plugin designed to streamline your development workflow. It provides a seamless experience for managing and organizing your code, offering powerful features to enhance productivity and code quality.
 
 ## Features

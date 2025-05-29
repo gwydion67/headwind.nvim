@@ -91,6 +91,9 @@ function M.sort_class_string(class_string, sort_order, options)
 	local default_separator_is_dot = not has_spaces
 	local default_replacement = has_spaces and " " or "."
 
+	-- Preserve trailing spaces
+	local trailing_spaces = string.match(class_string, "%s*$") or ""
+
 	-- Split classString exactly like TypeScript version
 	local class_array = {}
 
@@ -170,9 +173,9 @@ function M.sort_class_string(class_string, sort_order, options)
 
 	-- Exact logic from TypeScript: if( (default_separator == ".") && (classString.startsWith(".")))
 	if default_separator_is_dot and string.sub(class_string, 1, 1) == "." then
-		return "." .. result
+		return "." .. result .. trailing_spaces
 	else
-		return result
+		return result .. trailing_spaces
 	end
 end
 
